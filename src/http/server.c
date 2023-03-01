@@ -32,6 +32,9 @@ struct http_sock {
 	http_req_h *reqh;
 	https_verify_msg_h *verify_msg_h;
 	void *arg;
+#ifdef USE_TLS
+	bool reneg_enabled;
+#endif
 };
 
 struct http_conn {
@@ -180,6 +183,7 @@ static enum re_https_verify_msg verify_msg(struct http_conn *conn,
 		tmr_start(&conn->verify_cert_tmr, TIMEOUT_IDLE,
 			verify_cert_done, d);
 
+#ifdef USE_TLS
 		err = tls_set_verify_client_handler(http_conn_tls(conn),
 			-1, http_verify_handler, d);
 		if (err) {
@@ -187,12 +191,36 @@ static enum re_https_verify_msg verify_msg(struct http_conn *conn,
 			goto out;
 		}
 
-		err = tls_verify_client_post_handshake(
-				http_conn_tls(conn));
-		if (err) {
-			res = HTTPS_MSG_IGNORE;
-			goto out;
+		if (!strcmp(tls_version(http_conn_tls(conn)),
+				"TLSv1.2")) {
+			err = tls_enable_renegotiation(conn ? conn->sc : NULL,
+				conn->sock->reneg_enabled);
+			if (err)
+				goto out;
+
+			if (conn->sock->reneg_enabled) {
+				err = tls_renegotiate(http_conn_tls(conn));
+				if (err) {
+					res = HTTPS_MSG_IGNORE;
+					goto out;
+				}
+			}
+
+			err = tls_disable_session_on_reneg(http_conn_tls(conn));
+			if (err) {
+				res = HTTPS_MSG_IGNORE;
+				goto out;
+			}
 		}
+		else {
+			err = tls_verify_client_post_handshake(
+					http_conn_tls(conn));
+			if (err) {
+				res = HTTPS_MSG_IGNORE;
+				goto out;
+			}
+		}
+#endif
 	}
 
 out:
@@ -488,6 +516,25 @@ int  https_set_verify_msgh(struct http_sock *sock,
 		return EINVAL;
 
 	sock->verify_msg_h = verify_msg_h;
+
+	return 0;
+}
+
+
+/**
+ * Allow tls v1.2 renegotiation in verify msg handler
+ *
+ * @param sock 		HTTP socket
+ * @param value 	Enable or disable renegotiation support.
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int  https_enable_renegotiation(struct http_sock *sock, bool value)
+{
+	if (!sock)
+		return EINVAL;
+
+	sock->reneg_enabled = value;
 
 	return 0;
 }

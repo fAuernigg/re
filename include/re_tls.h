@@ -31,6 +31,7 @@ enum tls_keytype {
 struct tls_conn_d {
 	int (*verifyh) (int ok, void *d);
 	void *verify_d;
+	bool reneg_enabled;
 };
 
 int tls_alloc(struct tls **tlsp, enum tls_method method, const char *keyfile,
@@ -82,6 +83,9 @@ bool tls_get_session_reuse(const struct tls_conn *tc);
 int tls_reuse_session(const struct tls_conn *tc);
 bool tls_session_reused(const struct tls_conn *tc);
 int tls_update_sessions(const struct tls_conn *tc);
+int tls_enable_renegotiation(struct tls_conn *tc, bool enabled);
+int tls_renegotiate(const struct tls_conn *tc);
+int tls_disable_session_on_reneg(struct tls_conn *tc);
 int tls_set_posthandshake_auth(struct tls *tls, int enabled);
 
 /* TCP */
@@ -91,6 +95,7 @@ int tls_start_tcp(struct tls_conn **ptc, struct tls *tls,
 		  struct tcp_conn *tcp, int layer);
 
 int tls_verify_client_post_handshake(struct tls_conn *tc);
+const char* tls_version(struct tls_conn *tc);
 
 const struct tcp_conn *tls_get_tcp_conn(const struct tls_conn *tc);
 

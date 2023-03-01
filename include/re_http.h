@@ -152,6 +152,9 @@ int http_request(struct http_req **reqp, struct http_cli *cli, const char *met,
 		 const char *uri, http_resp_h *resph, http_data_h *datah,
 		 http_bodyh *bodyh, void *arg, const char *fmt, ...);
 void http_req_set_conn_handler(struct http_req *req, http_conn_h *connh);
+#ifdef USE_TLS
+void http_enable_renegotiation(struct http_req *req, bool value);
+#endif
 void http_client_set_laddr(struct http_cli *cli, const struct sa *addr);
 void http_client_set_laddr6(struct http_cli *cli, const struct sa *addr);
 void http_client_set_bufsize_max(struct http_cli *cli, size_t max_size);
@@ -172,6 +175,7 @@ int http_client_set_keypem(struct http_cli *cli, const char *pem);
 
 int http_client_set_session_reuse(struct http_cli *cli, bool enabled);
 int http_client_set_tls_min_version(struct http_cli *cli, int version);
+int http_client_set_tls_max_version(struct http_cli *cli, int version);
 int http_client_set_tls_max_version(struct http_cli *cli, int version);
 #endif
 
@@ -198,6 +202,7 @@ int  https_listen(struct http_sock **sockp, const struct sa *laddr,
 		  const char *cert, http_req_h *reqh, void *arg);
 int  https_set_verify_msgh(struct http_sock *sock,
 			   https_verify_msg_h *verify_msg_h);
+int  https_enable_renegotiation(struct http_sock *sock, bool value);
 struct tcp_sock *http_sock_tcp(struct http_sock *sock);
 struct tls *http_sock_tls(struct http_sock *conn);
 const struct sa *http_conn_peer(const struct http_conn *conn);
@@ -252,6 +257,7 @@ int http_reqconn_send(struct http_reqconn *conn, const struct pl *uri);
 #ifdef USE_TLS
 int http_reqconn_set_tls_hostname(struct http_reqconn *conn,
 		const struct pl *hostname);
+int http_reqconn_enable_renegotiation(struct http_reqconn *req, bool value);
 #endif
 
 int http_reqconn_set_req_bodyh(struct http_reqconn *conn,

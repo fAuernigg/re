@@ -80,6 +80,9 @@ struct http_req {
 	bool secure;
 	bool close;
 	http_bodyh *bodyh;
+#ifdef USE_TLS
+	bool reneg_enabled;
+#endif
 };
 
 
@@ -631,6 +634,10 @@ static int conn_connect(struct http_req *req)
 
 		if (err)
 			goto out;
+
+		err = tls_enable_renegotiation(conn->sc, req->reneg_enabled);
+		if (err)
+			goto out;
 	}
 #endif
 
@@ -967,6 +974,23 @@ void http_req_set_conn_handler(struct http_req *req, http_conn_h *connh)
 
 	req->connh = connh;
 }
+
+
+#ifdef USE_TLS
+/**
+ * Allow tls v1.2 renegotiation
+ *
+ * @param req   HTTP request object
+ * @param value Enable or disable renegotiation support.
+ */
+void http_enable_renegotiation(struct http_req *req, bool value)
+{
+	if (!req)
+		return;
+
+	req->reneg_enabled = value;
+}
+#endif
 
 
 int http_client_set_config(struct http_cli *cli, struct http_conf *conf)

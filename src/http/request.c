@@ -70,6 +70,7 @@ struct http_reqconn {
 
 #ifdef USE_TLS
 	char *tlshn;             /**< TLS host name                          */
+	bool reneg_enabled;      /**< Allow renegotiation in TLS v1.2        */
 #endif
 };
 
@@ -376,6 +377,9 @@ static int send_req(struct http_reqconn *conn, const struct pl *auth)
 		return err;
 	}
 
+#ifdef USE_TLS
+	http_enable_renegotiation(conn->req, conn->reneg_enabled);
+#endif
 	/* keep internal reference for resp_handler */
 	mem_ref(conn);
 	return 0;
@@ -660,3 +664,22 @@ int http_reqconn_set_req_bodyh(struct http_reqconn *conn,
 
 	return err;
 }
+
+
+#ifdef USE_TLS
+/**
+ * Allow tls v1.2 renegotiation
+ *
+ * @param req   HTTP request object
+ * @param value Enable or disable renegotiation support.
+ */
+int http_reqconn_enable_renegotiation(struct http_reqconn *req, bool value)
+{
+	if (!req)
+		return EINVAL;
+
+	req->reneg_enabled = value;
+
+	return 0;
+}
+#endif

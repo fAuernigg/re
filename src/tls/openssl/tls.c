@@ -2091,6 +2091,77 @@ const struct list *tls_certs(const struct tls *tls)
 
 
 /**
+ * Enable to allow tls renegotiation in tls v1.2
+ *
+ * @param tc  tlc connection object
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int tls_enable_renegotiation(struct tls_conn *tc, bool enabled)
+{
+	if (!tc)
+		return EINVAL;
+
+	tc->cd.reneg_enabled = enabled;
+
+	return 0;
+}
+
+
+/**
+ * Start tls renegotiation
+ * Sends a TLS "Hello Request" to the client.
+ *
+ * E.g. After "Client Hello" is sent the server can request
+ * a certificate from the client in the Server Hello response.
+ *
+ * @param tc  tlc connection object
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int tls_renegotiate(const struct tls_conn *tc)
+{
+	int err = 0;
+	if (!tc || !tc->tls)
+		return EINVAL;
+
+	if (SSL_renegotiate(tc->ssl) <= 0) {
+		err = EFAULT;
+		DEBUG_WARNING("%s: error: %m, ssl_err=%d\n", __func__, err,
+			SSL_get_error(tc->ssl, err));
+	}
+
+	/* process state machine */
+	if (SSL_do_handshake(tc->ssl) <= 0) {
+		err = EIO;
+		DEBUG_WARNING("%s: error: %m, ssl_err=%d\n", __func__, err,
+			SSL_get_error(tc->ssl, err));
+	}
+
+	return err;
+}
+
+
+/**
+ * Disable session resumption (server side only)
+ *
+ * @param tc  tlc connection object
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int tls_disable_session_on_reneg(struct tls_conn *tc)
+{
+	if (!tc)
+		return EINVAL;
+
+	SSL_set_options(tc->ssl,
+		SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION);
+
+	return 0;
+}
+
+
+/**
  * Enable/disable posthandshake
  * Only on client side for TLSv1.3
  *
@@ -2151,4 +2222,21 @@ int tls_verify_client_post_handshake(struct tls_conn *tc)
 	(void)tc;
 	return ENOSYS;
 #endif
+}
+
+
+/**
+ * Request client certificate using post handshake
+ * Only on client side for TLSv1.3
+ *
+ * @param tc  tls connection
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+const char* tls_version(struct tls_conn *tc)
+{
+	if (!tc || !tc->ssl)
+		return "";
+
+	return SSL_get_version(tc->ssl);
 }
