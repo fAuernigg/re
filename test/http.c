@@ -428,7 +428,8 @@ static size_t http_req_long_body_handler(struct mbuf *mb, void *arg)
 
 
 static int test_http_loop_base(bool secure, const char *met, bool http_conn,
-	bool dns_srv_query, bool dns_set_conf_test, bool post_handshake)
+	bool dns_srv_query, bool dns_set_conf_test, bool post_handshake,
+	bool tlsv12)
 {
 	struct http_sock *sock = NULL;
 	struct http_cli *cli = NULL;
@@ -488,9 +489,20 @@ static int test_http_loop_base(bool secure, const char *met, bool http_conn,
 		if (err)
 			goto out;
 
-		if (t.cert_auth)
+		if (t.cert_auth) {
 			err = https_set_verify_msgh(sock,
 				https_verify_msg_handler);
+			if (err)
+				goto out;
+
+			err = https_enable_renegotiation(sock, tlsv12);
+			if (err)
+				goto out;
+
+		}
+
+		if (tlsv12)
+			tls_set_max_proto_version(http_sock_tls(sock), 0x0303);
 	}
 	else {
 		err = http_listen(&sock, &srv,
@@ -522,6 +534,9 @@ static int test_http_loop_base(bool secure, const char *met, bool http_conn,
 		struct tls*	 cli_tls;
 		http_client_get_tls(cli, &cli_tls);
 
+		if (tlsv12)
+			tls_set_max_proto_version(cli_tls, 0x0303);
+
 		if (t.cert_auth) {
 			re_snprintf(path, sizeof(path),
 				"%s/sni/client-interm.pem", test_datapath());
@@ -545,7 +560,7 @@ static int test_http_loop_base(bool secure, const char *met, bool http_conn,
 				goto out;
 		}
 
-		if (http_conn && !t.cert_auth)
+		if (http_conn && (!t.cert_auth || tlsv12))
 			err = tls_set_session_reuse(cli_tls, true);
 
 		if (err)
@@ -639,6 +654,8 @@ static int test_http_loop_base(bool secure, const char *met, bool http_conn,
 				if (err)
 					goto out;
 			}
+
+			(void) http_reqconn_enable_renegotiation(conn, tlsv12);
 
 			pl_set_str(&pl, url);
 			err = http_reqconn_send(conn, &pl);
@@ -762,59 +779,74 @@ out:
 
 int test_http_loop(void)
 {
-	return test_http_loop_base(false, "GET", false, false, false, false);
+	return test_http_loop_base(false, "GET", false, false, false, false,
+		false);
 }
 
 
 #ifdef USE_TLS
 int test_https_loop(void)
 {
-	return test_http_loop_base(true, "GET", false, false, false, false);
+	return test_http_loop_base(true, "GET", false, false, false, false,
+		false);
 }
 #endif
 
 
 int test_http_large_body(void)
 {
-	return test_http_loop_base(false, "PUT", false, false, false, false);
+	return test_http_loop_base(false, "PUT", false, false, false, false,
+		false);
 }
 
 
 #ifdef USE_TLS
 int test_https_large_body(void)
 {
-	return test_http_loop_base(true, "PUT", false, false, false, false);
+	return test_http_loop_base(true, "PUT", false, false, false, false,
+		false);
 }
 #endif
 
 
 int test_http_conn(void)
 {
-	return test_http_loop_base(false, "GET", true, false, false, false);
+	return test_http_loop_base(false, "GET", true, false, false, false,
+		false);
 }
 
 
 int test_http_conn_large_body(void)
 {
-	return test_http_loop_base(false, "PUT", true, false, false, false);
+	return test_http_loop_base(false, "PUT", true, false, false, false,
+		false);
 }
 
 
 int test_dns_http_integration(void)
 {
-	return test_http_loop_base(false, "GET", true, true, false, false);
+	return test_http_loop_base(false, "GET", true, true, false, false,
+		false);
 }
 
 
 int test_dns_cache_http_integration(void)
 {
-	return test_http_loop_base(false, "GET", true, true, true, false);
+	return test_http_loop_base(false, "GET", true, true, true, false,
+		false);
 }
 
 #ifdef USE_TLS
 int test_https_conn_post_handshake(void)
 {
-	return test_http_loop_base(true, "GET", true, false, false, true);
+	return test_http_loop_base(true, "GET", true, false, false, true,
+		false);
 }
 
+
+int test_https_conn_cert_reneg_tls_v12(void)
+{
+	return test_http_loop_base(true, "GET", true, false, false, true,
+		true);
+}
 #endif
